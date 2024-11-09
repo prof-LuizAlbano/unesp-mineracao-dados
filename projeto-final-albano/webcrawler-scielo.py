@@ -64,16 +64,43 @@ def load_site(url):
 """
 ParsePagePaper REESCREVER
 """
-def parsePageIndex(response, df):
-    page = BeautifulSoup(response.text, 'html.parser')
-    items = page.select("div.results > div.item")
-    
-    for item in items :
-        title = item.select("div.line strong.title")
-        url = item.select("div.line a")
+def ParsePagePaper(paper_url):
+    response = load_site(paper_url)
 
-        df = df._append({ "Title" : title[0].text.strip(), "URL" : url[0]['href']}, ignore_index = True)
-    return df
+    page = BeautifulSoup(response.text, 'html.parser')
+    with open('paper.html', 'w', encoding="utf-8") as f:
+        f.write(page.text)
+
+    paper = page.find("div", class_="articleTxt")
+
+    title = paper.find("h1", class_="article-title")
+    subtitle = paper.find("h2", class_="article-title")
+    
+    edition_txt = paper.find("span", class_="_editionMeta").text.replace("\n", "")
+    edition_txt = re.sub(' +', ' ', edition_txt).split(' • ')
+    
+    doi = paper.find("a", class_="_doi")
+
+    paper_text = paper.find('div', attrs={'data-anchor': 'Text'}).text
+    paper_text = paper_text.replace("\n", "")
+    paper_text = paper_text.replace(" [Crossref]Crossref... ", "")
+    paper_text = paper_text.replace("[Link]", "")
+    paper_text = re.sub(' +', ' ', paper_text)
+
+    paper_data = {
+        "Title" : title.text,
+        "Subtitle" : subtitle.text,
+        "Edition" : edition_txt[0],
+        "Year" : edition_txt[1],
+        "DOI" : doi['href'],
+        'Text' : paper_text
+    }
+
+    
+
+    print(paper_data)
+    exit()
+    return {}
 
 """
 ParsePageIndex
@@ -85,6 +112,11 @@ def parsePageIndex(response, df):
     for item in items :
         title = item.select("div.line strong.title")
         url = item.select("div.line a")
+        
+        authors = item.select("div.line.authors")
+        authors = re.sub(' +', '', authors[0].text.replace("\n", "")).replace(";", "; ")
+
+        paper = ParsePagePaper( url[0]['href'] )
 
         df = df._append({ "Title" : title[0].text.strip(), "URL" : url[0]['href']}, ignore_index = True)
     return df
@@ -107,7 +139,7 @@ df.to_excel("Artigos_SciELO.xlsx")
 
 
 
-#Colunas: ID, Título, Subtítulo, Palavras-chave, Autores, Resumo, Texto, Ano Publicação, Editors, DOI
+#Colunas: ID, Título(OK), Subtítulo(OK), Palavras-chave, Autores(OK), Resumo, Texto(OK), Ano Publicação(OK), Editora(OK), DOI(OK)
 
 # SciELO pages:
 # https://www.scielo.br/j/qn/a/XnhMZ3mhrQWRMTbZJRhqtTF/?lang=pt#
