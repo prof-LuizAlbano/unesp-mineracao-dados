@@ -1,21 +1,27 @@
 import requests
 import re
 from bs4 import BeautifulSoup
-import pandas as pd
 import sqlite3
+from datetime import date
 
 """
 Config vars
 """
 
+# Start page
+start_page = 128
+
 # Amount of pages
-pages_total = 1 #130
+pages_total = 130
 
 # Amount of items (papers)
 pages_items = 50
 
 # Database connection
 conn = None
+
+# Databse file
+db_file = "datasets/scielo.papers.db"
 
 """
 Open a connection to a SQLite database file.
@@ -26,7 +32,8 @@ def database_connect(database_file):
         with sqlite3.connect(database_file) as conn:
             print(f"Opened SQLite database with version {sqlite3.sqlite_version} successfully.")
     except sqlite3.OperationalError as err:
-        print("Failed to open datanase: ", database_file, e)
+        print("Failed to open database: ", database_file, err)
+        exit()
 
 
 """
@@ -59,6 +66,7 @@ def load_site(url):
         return response
     else :
         print(f'Falha na requisição - código do erro: {response.status_code}')
+        return None
 
 
 """
@@ -67,14 +75,17 @@ ParsePagePaper REESCREVER
 def ParsePagePaper(paper_url):
     response = load_site(paper_url)
 
+    if response is None :
+        return None
+
     page = BeautifulSoup(response.text, 'html.parser')
-    with open('paper.html', 'w', encoding="utf-8") as f:
-        f.write(page.text)
 
     paper = page.find("div", class_="articleTxt")
 
-    title = paper.find("h1", class_="article-title")
-    subtitle = paper.find("h2", class_="article-title")
+    title = paper.find("h1", class_="article-title").text.replace("\n", "") if paper.find("h1", class_="article-title") else ""
+    title = str(title) if type(title) == list else title
+    subtitle = paper.find("h2", class_="article-title").text.replace("\n", "") if paper.find("h2", class_="article-title") else ""
+    subtitle = str(subtitle) if type(subtitle) == list else subtitle
     
     edition_txt = paper.find("span", class_="_editionMeta").text.replace("\n", "")
     edition_txt = re.sub(' +', ' ', edition_txt).split(' • ')
@@ -82,35 +93,30 @@ def ParsePagePaper(paper_url):
     doi = paper.find("a", class_="_doi")
 
     paper_text = paper.find('div', attrs={'data-anchor': 'Text'}).text
-    paper_text = paper_text.replace("\n", "")
+    paper_text = paper_text.replace("\n", "  ")
     paper_text = paper_text.replace(" [Crossref]Crossref... ", "")
     paper_text = paper_text.replace("[Link]", "")
     paper_text = re.sub(' +', ' ', paper_text)
 
-    paper_data = {
-        "Title" : title.text,
-        "Subtitle" : subtitle.text,
+    return {
+        "Title" : str(title),
+        "Subtitle" : subtitle,
         "Edition" : edition_txt[0],
-        "Year" : edition_txt[1],
+        "Paper_Year" : edition_txt[1],
         "DOI" : doi['href'],
-        'Text' : paper_text
+        'Content' : paper_text
     }
-
-    
-
-    print(paper_data)
-    exit()
-    return {}
 
 """
 ParsePageIndex
 """
-def parsePageIndex(response, df):
+def parsePageIndex(response):
+    global conn
+
     page = BeautifulSoup(response.text, 'html.parser')
     items = page.select("div.results > div.item")
     
     for item in items :
-        title = item.select("div.line strong.title")
         url = item.select("div.line a")
         
         authors = item.select("div.line.authors")
@@ -118,24 +124,37 @@ def parsePageIndex(response, df):
 
         paper = ParsePagePaper( url[0]['href'] )
 
-        df = df._append({ "Title" : title[0].text.strip(), "URL" : url[0]['href']}, ignore_index = True)
-    return df
+        if paper is None:
+            continue
+
+        paper['Authors'] = authors
+        paper['URL'] = url[0]['href']
+        paper['PubDate'] = "2024-11-10"
+        paper['Language'] = "pt"
+
+        columns = ', '.join(paper.keys())
+        placeholders = ', '.join('?' * len(paper))
+        query = "INSERT INTO papers ({}) VALUES ({})".format(columns, placeholders)
+
+        conn.execute(query, tuple(paper.values()))
+        conn.commit()
 
 
 """
 Bootstrap section
 """
 
-df = pd.DataFrame({ "Title" : [], "URL" : [] })
-print(df)
+database_connect("dataset/scielo.papers.db")
 
-for page in range(1, pages_total+1):
+for page in range(start_page, pages_total+1):
     url = parse_url_scielo(page, pages_items)
     res = load_site(url)
-    df = parsePageIndex(res, df)
+
+    if res is not None:
+        parsePageIndex(res)
 
 
-df.to_excel("Artigos_SciELO.xlsx")
+conn.close()
 
 
 
