@@ -9,10 +9,10 @@ Config vars
 """
 
 # Start page
-start_page = 128
+start_page = 32
 
 # Amount of pages
-pages_total = 130
+pages_total = 32
 
 # Amount of items (papers)
 pages_items = 50
@@ -21,7 +21,7 @@ pages_items = 50
 conn = None
 
 # Databse file
-db_file = "datasets/scielo.papers.db"
+db_file = "dataset/scielo.papers.carbono.db"
 
 """
 Open a connection to a SQLite database file.
@@ -45,7 +45,8 @@ Configura a URL de busca na plataforma SciELO.
 """
 def parse_url_scielo(page=0, count=50):
     from_count = 0 if page == 1 else (page * count) - 49
-    return f"https://search.scielo.org/?q=*&lang=pt&count={count}&from={from_count}&output=site&sort=&format=summary&fb=&page={page}&filter%5Bin%5D%5B%5D=scl&filter%5Bla%5D%5B%5D=pt&filter%5Bsubject_area%5D%5B%5D=Exact+and+Earth+Sciences&filter%5Btype%5D%5B%5D=research-article"
+    #return f"https://search.scielo.org/?q=*&lang=pt&count={count}&from={from_count}&output=site&sort=&format=summary&fb=&page={page}&filter%5Bin%5D%5B%5D=scl&filter%5Bla%5D%5B%5D=pt&filter%5Bsubject_area%5D%5B%5D=Exact+and+Earth+Sciences&filter%5Btype%5D%5B%5D=research-article"
+    return f"https://search.scielo.org/?q=cr%C3%A9dito+de+carbono&lang=pt&count={count}&from={from_count}&output=site&sort=&format=summary&fb=&page={page}&filter%5Bin%5D%5B%5D=scl&filter%5Bla%5D%5B%5D=pt&filter%5Btype%5D%5B%5D=research-article&q=carbono&lang=pt"
 
 
 """
@@ -93,6 +94,10 @@ def ParsePagePaper(paper_url):
     doi = paper.find("a", class_="_doi")
 
     paper_text = paper.find('div', attrs={'data-anchor': 'Text'}).text
+
+    if paper.find('div', attrs={'data-anchor': 'Text'}) == None :
+        return None
+    
     paper_text = paper_text.replace("\n", "  ")
     paper_text = paper_text.replace(" [Crossref]Crossref... ", "")
     paper_text = paper_text.replace("[Link]", "")
@@ -144,7 +149,7 @@ def parsePageIndex(response):
 Bootstrap section
 """
 
-database_connect("dataset/scielo.papers.db")
+database_connect(db_file)
 
 for page in range(start_page, pages_total+1):
     url = parse_url_scielo(page, pages_items)
@@ -155,12 +160,3 @@ for page in range(start_page, pages_total+1):
 
 
 conn.close()
-
-
-
-#Colunas: ID, Título(OK), Subtítulo(OK), Palavras-chave, Autores(OK), Resumo, Texto(OK), Ano Publicação(OK), Editora(OK), DOI(OK)
-
-# SciELO pages:
-# https://www.scielo.br/j/qn/a/XnhMZ3mhrQWRMTbZJRhqtTF/?lang=pt#
-# https://search.scielo.org/?q=*&lang=pt&count=50&from=1&output=site&sort=&format=summary&fb=&page=1&filter%5Bin%5D%5B%5D=scl&filter%5Bla%5D%5B%5D=pt&filter%5Bsubject_area%5D%5B%5D=Exact+and+Earth+Sciences&filter%5Btype%5D%5B%5D=research-article
-# https://theleftjoin.com/how-to-write-a-pandas-dataframe-to-an-sqlite-table/
